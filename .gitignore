@@ -1,0 +1,13 @@
+*.lst
+STM32-Test/MDK-ARM/STM32-Test Configuration/.axf
+STM32-Test/MDK-ARM/STM32-Test Configuration/.build_log.htm
+*.htm
+*.lnp
+*.map
+STM32-Test/MDK-ARM/STM32-Test Configuration/.sct
+STM32-Test/MDK-ARM/STM32-Test Configuration/ExtDll.iex
+*.crf
+*.d
+*.o
+*.dep
+*.Andreas
