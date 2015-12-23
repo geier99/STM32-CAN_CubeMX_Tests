@@ -45,6 +45,26 @@ WWDG_HandleTypeDef hwwdg;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+
+//! Makro for the delay times
+#define CAN_TRANSMIT_DELAY (100)
+#define LED_TICKS (250)
+
+//! Struktur auf alle Timer-Ticks Variablen  (maximal 255 Variablen)
+typedef volatile struct timeoutticks_st {
+    uint32_t canTransmitDelay;          // Verzögerungszeit bis nächste Tx-Message gesendet wird
+    uint32_t ledTicks;                  // ticks für led blinken
+} timeoutticks_t;
+
+static timeoutticks_t TimeoutTicks = {     
+    CAN_TRANSMIT_DELAY          // this have to be always the first entry
+,   LED_TICKS   
+};
+
+static timeoutticks_t * const pTicks = &TimeoutTicks;  // I like pointers, so I use pointers :-)
+
+
+
 static CanTxMsgTypeDef myTxMessage;
 static CanRxMsgTypeDef myRxMessage;
 static CAN_FilterConfTypeDef myFilter;
@@ -61,6 +81,7 @@ static void MX_WWDG_Init(void);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan);
+void HAL_SYSTICK_Callback(void);  // handle own additional systicks
 
 /* USER CODE END PFP */
 
@@ -108,8 +129,6 @@ int main(void)
     
     HAL_CAN_Transmit_IT(&hcan1);
     
-    
-    
     myFilter.FilterNumber           = 0;
     myFilter.FilterMode             = CAN_FILTERMODE_IDMASK;
     myFilter.FilterScale            = CAN_FILTERSCALE_32BIT;
@@ -120,14 +139,10 @@ int main(void)
     myFilter.FilterFIFOAssignment   = 0;
     myFilter.FilterActivation       = ENABLE;
     
-    hcan1.pRxMsg=  &myRxMessage;
-    
     HAL_CAN_ConfigFilter(&hcan1,&myFilter);
     
-    
-    
-    
-    
+
+    hcan1.pRxMsg=  &myRxMessage;
     if (HAL_CAN_Receive_IT(&hcan1, CAN_FIFO0) != HAL_OK) {
         /* Reception Error */
         HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_RESET);
@@ -150,10 +165,21 @@ int main(void)
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-   HAL_CAN_Transmit_IT(&hcan1);
+
+    HAL_CAN_Receive_IT(&hcan1,CAN_FIFO0);
       
-   HAL_Delay(100);
-      HAL_CAN_Receive_IT(&hcan1,CAN_FIFO0);
+    if(!pTicks->ledTicks) {
+        pTicks->ledTicks = LED_TICKS;
+        
+//        HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin);
+    }
+
+    if(!pTicks->canTransmitDelay) {
+        pTicks->canTransmitDelay = CAN_TRANSMIT_DELAY;
+        
+        HAL_CAN_Transmit_IT(&hcan1);
+    }
+        
       
   }
   /* USER CODE END 3 */
@@ -300,6 +326,28 @@ void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan) {
     HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin);
+    
+}
+
+/**
+  * @brief  Own-Systik Handler 
+  *         
+  * This function is called every 1ms. This function is used to handle the won pTicks structurel.<br>
+  * maximal 255 tick variables are allowed 
+  *
+  */
+void HAL_SYSTICK_Callback(void){  // handle own additional systicks
+    uint32_t i;
+    volatile uint32_t *pTick = &TimeoutTicks.canTransmitDelay ;    // this have to be the first variable in the timeticks
+
+    // decrement all tick varriable 
+    for (i=0; i < ( sizeof(timeoutticks_t) / sizeof(uint32_t));i++) {
+        if (*pTick) {
+            (*pTick)--;
+        }
+        pTick++;
+    }
+    
     
 }
 
