@@ -46,6 +46,9 @@ WWDG_HandleTypeDef hwwdg;
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 static CanTxMsgTypeDef myTxMessage;
+static CanRxMsgTypeDef myRxMessage;
+static CAN_FilterConfTypeDef myFilter;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -57,6 +60,7 @@ static void MX_WWDG_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
+void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan);
 
 /* USER CODE END PFP */
 
@@ -105,6 +109,37 @@ int main(void)
     HAL_CAN_Transmit_IT(&hcan1);
     
     
+    
+    myFilter.FilterNumber           = 0;
+    myFilter.FilterMode             = CAN_FILTERMODE_IDMASK;
+    myFilter.FilterScale            = CAN_FILTERSCALE_32BIT;
+    myFilter.FilterIdHigh           = 0x0000;
+    myFilter.FilterIdLow            = 0x0000;
+    myFilter.FilterMaskIdHigh       = 0x0000;
+    myFilter.FilterMaskIdLow        = 0x0000;
+    myFilter.FilterFIFOAssignment   = 0;
+    myFilter.FilterActivation       = ENABLE;
+    
+    hcan1.pRxMsg=  &myRxMessage;
+    
+    HAL_CAN_ConfigFilter(&hcan1,&myFilter);
+    
+    
+    
+    
+    
+    if (HAL_CAN_Receive_IT(&hcan1, CAN_FIFO0) != HAL_OK) {
+        /* Reception Error */
+        HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_RESET);
+    }    
+    
+
+    myTxMessage.DLC = 3;
+    myTxMessage.ExtId = 0x14F00500;
+    
+    myTxMessage.IDE = CAN_ID_EXT;
+
+
 
   /* USER CODE END 2 */
 
@@ -115,7 +150,11 @@ int main(void)
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-
+   HAL_CAN_Transmit_IT(&hcan1);
+      
+   HAL_Delay(100);
+      HAL_CAN_Receive_IT(&hcan1,CAN_FIFO0);
+      
   }
   /* USER CODE END 3 */
 
@@ -161,7 +200,7 @@ void MX_CAN1_Init(void)
 {
 
   hcan1.Instance = CAN1;
-  hcan1.Init.Prescaler = 12;
+  hcan1.Init.Prescaler = 6;
   hcan1.Init.Mode = CAN_MODE_NORMAL;
   hcan1.Init.SJW = CAN_SJW_1TQ;
   hcan1.Init.BS1 = CAN_BS1_8TQ;
@@ -181,7 +220,7 @@ void MX_CAN2_Init(void)
 {
 
   hcan2.Instance = CAN2;
-  hcan2.Init.Prescaler = 12;
+  hcan2.Init.Prescaler = 6;
   hcan2.Init.Mode = CAN_MODE_NORMAL;
   hcan2.Init.SJW = CAN_SJW_1TQ;
   hcan2.Init.BS1 = CAN_BS1_8TQ;
@@ -259,6 +298,10 @@ void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan) {
+    HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin);
+    
+}
 
 /* USER CODE END 4 */
 
