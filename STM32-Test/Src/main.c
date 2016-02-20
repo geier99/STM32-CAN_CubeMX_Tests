@@ -58,6 +58,13 @@ typedef volatile struct timeoutticks_st {
     uint32_t ledTicks;                  // ticks für led blinken
 } timeoutticks_t;
 
+//! Status Flags from STM32-CAN device
+typedef volatile struct stm32Status_st {
+    uint32_t usbConnected ;              // set to 1 then stm32 is connected to usb and initialized
+    
+} stm32Status_t;;
+
+
 static timeoutticks_t TimeoutTicks = {     
     CAN_TRANSMIT_DELAY          // this have to be always the first entry
 ,   LED_TICKS   
@@ -65,13 +72,17 @@ static timeoutticks_t TimeoutTicks = {
 
 static timeoutticks_t * const pTicks = &TimeoutTicks;  // I like pointers, so I use pointers :-)
 
+static stm32Status_t stm32Status;
+static stm32Status_t * const pStatus = &stm32Status;
 
 
 static CanTxMsgTypeDef myTxMessage;
 static CanRxMsgTypeDef myRxMessage;
 static CAN_FilterConfTypeDef myFilter;
 
- unsigned char usbHelloMsg[]= "\nGreetings from USB device";
+unsigned char usbHelloMsg[]= "\nGreetings from USB device";
+
+unsigned char usbLine[50];
 
 
 /* USER CODE END PV */
@@ -87,6 +98,8 @@ static void MX_WWDG_Init(void);
 /* Private function prototypes -----------------------------------------------*/
 void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan);
 void HAL_SYSTICK_Callback(void);  // handle own additional systicks
+
+
 
 /* USER CODE END PFP */
 
@@ -176,6 +189,10 @@ int main(void)
 
     HAL_CAN_Receive_IT(&hcan1,CAN_FIFO0);
       
+    
+  
+      
+      
     if(!pTicks->ledTicks) {
         pTicks->ledTicks = LED_TICKS;
         
@@ -186,7 +203,8 @@ int main(void)
         pTicks->canTransmitDelay = CAN_TRANSMIT_DELAY;
         
         HAL_CAN_Transmit_IT(&hcan1);
-        CDC_Transmit_FS(usbHelloMsg,strlen(usbHelloMsg));
+
+        CDC_Transmit_FS(usbHelloMsg,strlen((const char *)usbHelloMsg));
 
     }
         

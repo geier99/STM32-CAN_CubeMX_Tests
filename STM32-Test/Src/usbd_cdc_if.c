@@ -145,6 +145,7 @@ static int8_t CDC_Init_FS(void)
   /* Set Application Buffers */
   USBD_CDC_SetTxBuffer(hUsbDevice_0, UserTxBufferFS, 0);
   USBD_CDC_SetRxBuffer(hUsbDevice_0, UserRxBufferFS);
+  USBD_CDC_ReceivePacket(hUsbDevice_0);    
   return (USBD_OK);
   /* USER CODE END 3 */ 
 }
