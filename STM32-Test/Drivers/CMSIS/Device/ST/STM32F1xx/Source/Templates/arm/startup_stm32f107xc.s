@@ -1,8 +1,8 @@
 ;******************** (C) COPYRIGHT 2015 STMicroelectronics ********************
 ;* File Name          : startup_stm32f107xc.s
 ;* Author             : MCD Application Team
-;* Version            : V4.0.1
-;* Date               : 31-July-2015
+;* Version            : V4.0.2
+;* Date               : 18-December-2015
 ;* Description        : STM32F107xC Devices vector table for MDK-ARM toolchain. 
 ;*                      This module performs:
 ;*                      - Set the initial SP

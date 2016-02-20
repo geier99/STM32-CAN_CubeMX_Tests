@@ -11,3 +11,4 @@ STM32-Test/MDK-ARM/STM32-Test Configuration/ExtDll.iex
 *.o
 *.dep
 *.Andreas
+STM32-Test/MDK-ARM/STM32-Test/STM32-Test.axf

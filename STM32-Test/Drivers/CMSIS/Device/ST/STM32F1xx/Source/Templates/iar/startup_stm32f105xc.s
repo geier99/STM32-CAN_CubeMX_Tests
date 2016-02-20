@@ -1,8 +1,8 @@
 ;******************** (C) COPYRIGHT 2015 STMicroelectronics *******************
 ;* File Name          : startup_stm32f105xc.s
 ;* Author             : MCD Application Team
-;* Version            : V4.0.1
-;* Date               : 31-July-2015
+;* Version            : V4.0.2
+;* Date               : 18-December-2015
 ;* Description        : STM32F105xC Connectivity line devices vector table for 
 ;*                      EWARM toolchain.
 ;*                      This module performs:
