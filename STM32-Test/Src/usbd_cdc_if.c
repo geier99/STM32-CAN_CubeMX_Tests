@@ -33,6 +33,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_cdc_if.h"
 /* USER CODE BEGIN INCLUDE */
+#include "main.h"
 /* USER CODE END INCLUDE */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -257,8 +258,57 @@ static int8_t CDC_Control_FS  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS (uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
+
+  // todo Daten verarbeiten
+  uint32_t i;
+  unsigned char ch,newline=0;
+    
+    
   USBD_CDC_SetRxBuffer(hUsbDevice_0, &Buf[0]);
   USBD_CDC_ReceivePacket(hUsbDevice_0);
+
+
+  for (i = 0; i < *Len; i++)  {
+        ch=*(Buf + i);        
+        if ( (ch == 0x07) || (ch == 0x0D) ) {                               // Zeilenende oder Error empfangen
+            newline=1;                                                      // Komplette Zeile empfangen
+                                                                            // todo auch das endezeichen ablegen?
+        }
+        else {                                                              // kein Error Zeichen und kein Zeilen Ende ==> Daten ablegen
+            myLastLine[myWriteIndexLastLine][myLastLinePosIdx++]=ch;        // Zeichen ablegen
+            if(myLastLinePosIdx>=MAX_USB_RECEIVED_BUFFER_LEN) {             // Zuviele Zeichen bevor 0x0D kommt ?
+                myLastLine[myWriteIndexLastLine][0]=0x07;                   // Error Pos an 1.Stelle ablegen
+                newline=1;                                                  // Und Kennung für neue Zeile setzen
+            }
+        } 
+
+        
+        //vResetWdg();
+
+        if(newline) {
+            newline=0;                                                      
+
+            myLastLine[myWriteIndexLastLine][myLastLinePosIdx]=0x00;      // eine 0 am Ende dran hängen, damit mit Stringfunktionen gearbetet weden kann.
+            myLastLinePosIdx=0;
+
+            if(myWriteIndexLastLine < (MAX_USB_RECEIVED_BUFFER - 1)) {      //  Schreib index für den Empfangsbuffer eins weiter bzw. auf Anfang setzen
+                myWriteIndexLastLine += 1;                                  
+            }
+            else {
+                myWriteIndexLastLine = 0;
+            }
+               HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin);
+         }
+  }  
+    
+    
+    
+    
+    
+    
+    
+    
+    
   return (USBD_OK);
   /* USER CODE END 6 */ 
 }

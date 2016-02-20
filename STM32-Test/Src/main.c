@@ -35,6 +35,7 @@
 #include "usb_device.h"
 
 /* USER CODE BEGIN Includes */
+#include "main.h"
 #include "usbd_cdc_if.h"
 
 /* USER CODE END Includes */
@@ -85,6 +86,21 @@ unsigned char usbHelloMsg[]= "\nGreetings from USB device";
 unsigned char usbLine[50];
 
 
+volatile unsigned char myLastLine[MAX_USB_RECEIVED_BUFFER][MAX_USB_RECEIVED_BUFFER_LEN+1];   // Ablage Commandas Strings die per USB empfangen werden (+1 für die abschliesende 0 für Strings)
+volatile unsigned char strReceivedCommando[MAX_USB_RECEIVED_BUFFER_LEN+1];                   // Buffer für eine komplette Zeile
+volatile unsigned char strSendCommando[MAX_USB_RECEIVED_BUFFER_LEN+1];                       // eigneer Sendebuffer zum Test da eventuell die gemeinsame Nutzung von strReceivedCommando nicht funktioniert
+
+volatile unsigned char myLastLinePosIdx = 0;     ;  // Spaltenindex von USB STring
+
+// aa test
+volatile unsigned char strStatusCommand[5];
+
+volatile unsigned char myWriteIndexLastLine = 0  ;  //SchreibIndesx für den USB STring, wenn beide indexe gleich sind, dann liegt keine neue Nachricht im Buffer
+volatile unsigned char myReadIndexLastLine  = 0  ;  // Lese Index für den USB
+
+
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -111,7 +127,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+    uint32_t i;
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -204,9 +220,58 @@ int main(void)
         
         HAL_CAN_Transmit_IT(&hcan1);
 
-        CDC_Transmit_FS(usbHelloMsg,strlen((const char *)usbHelloMsg));
+        // CDC_Transmit_FS(usbHelloMsg,strlen((const char *)usbHelloMsg));
 
     }
+    
+
+    if(myWriteIndexLastLine!=myReadIndexLastLine) {  // neuen Commandostring empfangen?
+
+        i= sprintf((char*)strReceivedCommando,"%s",myLastLine[myReadIndexLastLine]);  // Befehl kopieren als sring
+
+        // für debugzwecken einen Pong machen
+        #ifdef PING_PONG
+            CDC_Transmit_FS((unsigned char *)strReceivedCommando,i);   // CAN-Hacker don't want echos :-)
+        #endif
+
+
+        switch (strReceivedCommando[0]) {           // execute Lawicel commands
+
+            case 'V':
+                CDC_Transmit_FS((unsigned char *) STM32_CAN_SW_VERSION, sizeof(STM32_CAN_SW_VERSION)-1 );
+            break;
+        
+            case 'v':
+                CDC_Transmit_FS((unsigned char *) STM32_CAN_HW_VERSION, sizeof(STM32_CAN_HW_VERSION)-1 );
+            break;
+
+            /* Place for the other Lawicel commands :-)
+            
+            
+            */
+            
+            
+            case 0x07:                              // Lawicel: error received?  also set by receiving more than 20 chars without [CR]
+                CDC_Transmit_FS((unsigned char *)strReceivedCommando,1);
+            
+            default:
+                strReceivedCommando[0]=0x07;        // send error back by receiving unknown command
+                CDC_Transmit_FS((unsigned char *)strReceivedCommando,1);
+            
+            break;
+         }   // end switch commds
+
+        if(myReadIndexLastLine < (MAX_USB_RECEIVED_BUFFER - 1)) {      //  Schreib index für den Empfangsbuffer eins weiter bzw. auf Anfang setzen
+            myReadIndexLastLine += 1;                                  
+        }
+        else {
+            myReadIndexLastLine = 0;
+        }
+    }  // Ende neuer Commandostring empfangen
+
+
+
+    
         
       
   }
