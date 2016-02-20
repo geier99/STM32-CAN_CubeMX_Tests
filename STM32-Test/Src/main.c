@@ -35,6 +35,7 @@
 #include "usb_device.h"
 
 /* USER CODE BEGIN Includes */
+#include "usbd_cdc_if.h"
 
 /* USER CODE END Includes */
 
@@ -69,6 +70,9 @@ static timeoutticks_t * const pTicks = &TimeoutTicks;  // I like pointers, so I 
 static CanTxMsgTypeDef myTxMessage;
 static CanRxMsgTypeDef myRxMessage;
 static CAN_FilterConfTypeDef myFilter;
+
+ unsigned char usbHelloMsg[]= "\nGreetings from USB device";
+
 
 /* USER CODE END PV */
 
@@ -167,6 +171,8 @@ int main(void)
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
+      
+    
 
     HAL_CAN_Receive_IT(&hcan1,CAN_FIFO0);
       
@@ -180,6 +186,8 @@ int main(void)
         pTicks->canTransmitDelay = CAN_TRANSMIT_DELAY;
         
         HAL_CAN_Transmit_IT(&hcan1);
+        CDC_Transmit_FS(usbHelloMsg,strlen(usbHelloMsg));
+
     }
         
       

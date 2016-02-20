@@ -158,6 +158,8 @@ static int8_t CDC_Init_FS(void)
 static int8_t CDC_DeInit_FS(void)
 {
   /* USER CODE BEGIN 4 */ 
+  hUsbDevice_0=NULL;  
+    
   return (USBD_OK);
   /* USER CODE END 4 */ 
 }
@@ -275,6 +277,9 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
 {
   uint8_t result = USBD_OK;
   /* USER CODE BEGIN 7 */ 
+  if( hUsbDevice_0 ==NULL)   // don't transmit if device is not connected to usb
+          return -1;
+  
   USBD_CDC_SetTxBuffer(hUsbDevice_0, Buf, Len);     
   while(result != USBD_OK);
   do {
