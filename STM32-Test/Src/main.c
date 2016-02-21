@@ -61,9 +61,12 @@ typedef volatile struct timeoutticks_st {
 
 //! Status Flags from STM32-CAN device
 typedef volatile struct stm32Status_st {
+    interface_flags_t interface_flags;
+    vu16 TimeStampCounter;
+  
     uint32_t usbConnected ;              // set to 1 then stm32 is connected to usb and initialized
     
-} stm32Status_t;;
+} stm32Status_t;
 
 
 static timeoutticks_t TimeoutTicks = {     
@@ -73,7 +76,12 @@ static timeoutticks_t TimeoutTicks = {
 
 static timeoutticks_t * const pTicks = &TimeoutTicks;  // I like pointers, so I use pointers :-)
 
-static stm32Status_t stm32Status;
+static stm32Status_t stm32Status = {
+    { 0,0,0,0 }     //flags
+,   0               // timestamp counter        
+,   0               // usb connected, not used    
+};
+
 static stm32Status_t * const pStatus = &stm32Status;
 
 
@@ -98,6 +106,24 @@ volatile unsigned char strStatusCommand[5];
 volatile unsigned char myWriteIndexLastLine = 0  ;  //SchreibIndesx für den USB STring, wenn beide indexe gleich sind, dann liegt keine neue Nachricht im Buffer
 volatile unsigned char myReadIndexLastLine  = 0  ;  // Lese Index für den USB
 
+
+
+
+volatile enBitrate enCanBaudrate = _500_kbit;   // Merker des Indexes auf die Baudrate 0=500 1 250 ...usw.
+
+//! Baudraten für den Sx Laviel-Protokoll setting Baudrate befehl   (Nummer von S ist der Index fürs Array)
+const enBitrate usbBaudSettings[_LAST_BAUDRATE_]= {
+    _10_kbit    // S0
+,   _20_kbit    // S1
+,   _50_kbit    // ...
+,   _100_kbit
+,   _125_kbit
+,   _250_kbit
+,   _500_kbit
+,   _33_kbit
+,   _95_kbit
+,   _83_kbit   // S9
+ };
 
 
 
@@ -207,12 +233,24 @@ int main(void)
       
     
   
+
+
+
       
       
     if(!pTicks->ledTicks) {
         pTicks->ledTicks = LED_TICKS;
+
+        if(!pStatus->interface_flags.CanChannelOnOff) {  // Wenn CAN geschlossen dann Power-LED toggeln
+            HAL_GPIO_TogglePin(LED_RED_GPIO_Port,LED_RED_Pin);
+        }
+        else {
+            HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_SET);
+        }
+
+
         
-//        HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin);
+       // HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin);
     }
 
     if(!pTicks->canTransmitDelay) {
@@ -250,7 +288,158 @@ int main(void)
             
             */
             
+            case 'S':  // set Baudrat S0..S9  , only allowed the CAN channel is closed
+                if ( (strReceivedCommando[1] >='0') &&  (strReceivedCommando[1] <='9') && (!pStatus->interface_flags.CanChannelOnOff)  ) {  // parmeter okay? and channel closed?
+                    SetCanBaudrate(usbBaudSettings[strReceivedCommando[1]-0x30]);
+                    pStatus->interface_flags.BaudSettingsReceived=1;
+
+                    strReceivedCommando[0]=0x0D;             
+                    CDC_Transmit_FS((unsigned char *)strReceivedCommando,1);
+                }
+                else {                         // wrong Parameter  ==> 0x07 senden
+                    strReceivedCommando[0]=0x07;             
+                    CDC_Transmit_FS((unsigned char *)strReceivedCommando,1);
+                    
+                    pStatus->interface_flags.BaudSettingsReceived=0;  // wegen falscher Baudrate zurücksetzen
+                }                    
+            break;
+                
+            case 's':  //Benutzerdefinierete Baudrate setzen  (erstmal nur s8333 für 83.33kbit und s3333 für 33,33kbit)
+                if (    (strReceivedCommando[1] =='8') && (strReceivedCommando[2] =='3') \
+                    &&  (strReceivedCommando[3] =='3') && (strReceivedCommando[4] =='3') \
+                    && (!pStatus->interface_flags.CanChannelOnOff)  ) {  // valid parameter and channel closed?
+                    SetCanBaudrate(usbBaudSettings[0x09]);
+                    pStatus->interface_flags.BaudSettingsReceived=1;
+
+                    strReceivedCommando[0]=0x0D;             
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                }
+                else {
+                    if ( (strReceivedCommando[1] =='3') &&  (strReceivedCommando[2] =='3') \
+                     &&  (strReceivedCommando[3] =='3') &&  (strReceivedCommando[4] =='3') \
+                     &&  (!pStatus->interface_flags.CanChannelOnOff)  ) {  // gültige Zahl und Kanal geschlossen?
+                        SetCanBaudrate(usbBaudSettings[0x07]);
+                        pStatus->interface_flags.BaudSettingsReceived=1;
+
+                        strReceivedCommando[0]=0x0D;             
+                        CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                    }
+                    else {
+                       // wrong parameter ==> send 0x07 
+                        strReceivedCommando[0]=0x07;             
+                        CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                        
+                        // todo flag setzen, dass fehlerhafte Baudrate empfangen wurde und somit der OpenBefehl nicht ausgefürht werden darf,
+                        // solange nicht eine korrekte benutzerdefinierte Baudreate bzw. ein S1..S9 empfangen wurde
+                        pStatus->interface_flags.BaudSettingsReceived=0;  // because of wrong baudrate received don't execute "Channel Open"
+                        
+                    }                    
+                }
+            break;
+                
+                
+            case 'O':    // CAN-Kanal öffnen (Kanal muss geschlossen sein)
+                pStatus->interface_flags.CanSilentModeOnOff = 0x00;  // normaler Modus
+                pStatus->TimeStampCounter=0;
+                if((!pStatus->interface_flags.CanChannelOnOff) && (pStatus->interface_flags.BaudSettingsReceived)) { // Kanal geschlossen und Baudrate schon empfangen?
+
+//                    todo aw ############### aaaaaaaaaaaaaaaaaaa
+//                    vInitCanWithScannedBaudrate(&CAN_InitStructure,&CAN_FilterInitStructure,CAN_Mode_Normal);
+
+                    pStatus->interface_flags.CanChannelOnOff=1;  // Flag auf offen setzen
+                    strReceivedCommando[0]=0x0D;             
+                    
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                }
+                else {  // ist schon offen
+                    strReceivedCommando[0]=0x07;  
+
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                }
+            break;
+    
+
+            case 'C':       // CAN-Kanal Schliessen    (Kanal muss offen sein
+                if(pStatus->interface_flags.CanChannelOnOff) { // Kanal offen?
+
+//                    todo aw aaaaaaaaaaaaaaaa
+//                    #ifdef USE_CAN1
+//                        CAN_ITConfig(CAN1, CAN_IT_FMP0, DISABLE);
+//                        CAN_ITConfig(CAN1, CAN_IT_FMP1, DISABLE);
+//                        CAN_DeInit(CAN1);
+//                    #endif
+//                    #ifdef USE_CAN2
+//                        CAN_ITConfig(CAN2, CAN_IT_FMP0, DISABLE);
+//                        CAN_ITConfig(CAN2, CAN_IT_FMP1, DISABLE);
+//                        CAN_DeInit(CAN2);
+//                    #endif    
+    
+                    pStatus->interface_flags.CanChannelOnOff=0;  // Flag auf geschlossen setzen
+                    
+                    strReceivedCommando[0]=0x0D;             
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+
+                    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin,GPIO_PIN_RESET);
+                    HAL_GPIO_WritePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin,GPIO_PIN_RESET);
+
+                }
+                else {  // ist schon  geschlossen
+                    strReceivedCommando[0]=0x07;             
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                }
+            break;
+                
+                
+                case 'L':  //ListenOnly-Mod    darf nur gesetzt werden, wenn der Channel geschlossen ist
+                    
+                    pStatus->interface_flags.CanSilentModeOnOff = 0x01;
+                
+                    pStatus->TimeStampCounter=0;
+                    if((!pStatus->interface_flags.CanChannelOnOff) && (pStatus->interface_flags.BaudSettingsReceived)) { // Kanal geschlossen und Baudrate schon empfangen?
+
+                        // todo aw aaaaaaaaaaaaaaaa
+                        // vInitCanWithScannedBaudrate(&CAN_InitStructure,&CAN_FilterInitStructure, CAN_Mode_Silent);
+    
+                        pStatus->interface_flags.CanChannelOnOff=1;  // Flag auf offen setzen
+                        strReceivedCommando[0]=0x0D;             
+
+                        //USB_SIL_Write(EP1_IN, (u8 *)strReceivedCommando, 1);
+                        CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                                
+                        
+                    }
+                    else {  // ist schon offen
+                        strReceivedCommando[0]=0x07;  
+
+                        //USB_SIL_Write(EP1_IN, (u8 *)strReceivedCommando, 1);
+                        CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                    }
+                break;
+                                
+                                
+                
+                
+
+                
+            case 'Z':  // Status für den Zeitstempel setzen
+                strReceivedCommando[0]=0x0D;  
+                if(strReceivedCommando[1]=='1') {
+                    pStatus->interface_flags.TimeStampOnOff=1;
+                }
+                else {
+                    if (strReceivedCommando[1]=='0') {
+                        pStatus->interface_flags.TimeStampOnOff=0;
+                    }
+                    else {  // unbekannter Status, Fehlercode setzen
+                        strReceivedCommando[0]=0x07;  
+                    }
+                }
+                CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+
+            break;
             
+
+                
             case 0x07:                              // Lawicel: error received?  also set by receiving more than 20 chars without [CR]
                 CDC_Transmit_FS((unsigned char *)strReceivedCommando,1);
             
@@ -455,6 +644,18 @@ void HAL_SYSTICK_Callback(void){  // handle own additional systicks
     
     
 }
+
+/**
+  * @brief  CAN Baudrate setzen
+  *         Baudrate für die CAN-Interfaces auf einen festen Wert setzen, <br>so das keine Autobauderkennung erforderlich ist.
+  * @param  None
+  * @retval Noen
+  */
+void SetCanBaudrate(enBitrate enBaud) {  //
+      enCanBaudrate=enBaud; 
+}
+
+
 
 /* USER CODE END 4 */
 
