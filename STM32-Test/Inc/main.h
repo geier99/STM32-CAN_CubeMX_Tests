@@ -96,13 +96,21 @@ typedef enum bitrate_ty {
 ,    _33_kbit
 ,    _20_kbit
 ,    _10_kbit
+,    _47_kbit    
 
 ,	_LAST_BAUDRATE_
 } enBitrate;
 
 #define COUNT_BITRATE (_LAST_BAUDRATE_)
 
- 
+
+typedef struct Bitrate_t {      // 
+    unsigned int Prescaler;
+    uint32_t BS1;
+    uint32_t BS2;
+} Bitrate_st ;
+
+
 
 
 extern volatile unsigned char  myLastLine[MAX_USB_RECEIVED_BUFFER][MAX_USB_RECEIVED_BUFFER_LEN+1];    // Ablage Commandas Strings die per USB empfangen werden

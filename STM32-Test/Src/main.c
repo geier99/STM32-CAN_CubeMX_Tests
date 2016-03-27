@@ -123,8 +123,25 @@ const enBitrate usbBaudSettings[_LAST_BAUDRATE_]= {
 ,   _33_kbit
 ,   _95_kbit
 ,   _83_kbit   // S9
+,   _47_kbit   // S10   not compatible to CAN-Hacker    
  };
 
+const Bitrate_st stBitrate[COUNT_BITRATE]= {  // Reihenfolge ergibt sich von der Enumaration von  enum bitrate_t
+//    PRESCal     BS1  BS2        // todo für stm
+     { 6    , CAN_BS1_8TQ, CAN_BS2_3TQ}  // 500kbit   S6  diese Werte gelten für einen Systemtakt von 72Mhz  PLCK1=32 MHz                         
+,    { 12   , CAN_BS1_8TQ, CAN_BS2_3TQ}  // 250kbit   S5                            
+,    { 24   , CAN_BS1_8TQ, CAN_BS2_3TQ}  // 125kbit   S4                            
+,    { 30   , CAN_BS1_8TQ, CAN_BS2_3TQ}  // 100kbit   S3                            
+,    { 42   , CAN_BS1_6TQ, CAN_BS2_2TQ}  // 95kbit                               
+,    { 36   , CAN_BS1_8TQ, CAN_BS2_3TQ}  // 83kbit    S9                              
+,    { 60   , CAN_BS1_8TQ, CAN_BS2_3TQ}  // 50kbit  S2                             
+,    { 90   , CAN_BS1_8TQ, CAN_BS2_3TQ}  // 33kbit                               
+,    { 150  , CAN_BS1_8TQ, CAN_BS2_3TQ}  // 20kbit  S1 
+,    { 300  , CAN_BS1_8TQ, CAN_BS2_3TQ}  // 10kbit  S0   
+,    { 42   , CAN_BS1_12TQ, CAN_BS2_5TQ}  // 47,619kbit  S10   
+};
+
+ 
 
 
 /* USER CODE END PV */
@@ -140,6 +157,7 @@ static void MX_WWDG_Init(void);
 /* Private function prototypes -----------------------------------------------*/
 void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan);
 void HAL_SYSTICK_Callback(void);  // handle own additional systicks
+static void USER_CANx_Init(CAN_HandleTypeDef *hCANx,enBitrate baud, uint32_t canMode);
 
 
 
@@ -172,6 +190,9 @@ int main(void)
   MX_USB_DEVICE_Init();
 
   /* USER CODE BEGIN 2 */
+  
+    USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_NORMAL);   // overwrite the cubeMX initialization
+    USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_NORMAL);   // first init it with 100kbit   todo: remvoe onyl init from lawicell opoen commands
 
     HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_SET);
     HAL_GPIO_WritePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin,GPIO_PIN_RESET);
@@ -308,7 +329,7 @@ int main(void)
                 if (    (strReceivedCommando[1] =='8') && (strReceivedCommando[2] =='3') \
                     &&  (strReceivedCommando[3] =='3') && (strReceivedCommando[4] =='3') \
                     && (!pStatus->interface_flags.CanChannelOnOff)  ) {  // valid parameter and channel closed?
-                    SetCanBaudrate(usbBaudSettings[0x09]);
+                    SetCanBaudrate(usbBaudSettings[_83_kbit]);
                     pStatus->interface_flags.BaudSettingsReceived=1;
 
                     strReceivedCommando[0]=0x0D;             
@@ -318,21 +339,31 @@ int main(void)
                     if ( (strReceivedCommando[1] =='3') &&  (strReceivedCommando[2] =='3') \
                      &&  (strReceivedCommando[3] =='3') &&  (strReceivedCommando[4] =='3') \
                      &&  (!pStatus->interface_flags.CanChannelOnOff)  ) {  // gültige Zahl und Kanal geschlossen?
-                        SetCanBaudrate(usbBaudSettings[0x07]);
+                        SetCanBaudrate(usbBaudSettings[_33_kbit]);
                         pStatus->interface_flags.BaudSettingsReceived=1;
 
                         strReceivedCommando[0]=0x0D;             
                         CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
                     }
                     else {
-                       // wrong parameter ==> send 0x07 
-                        strReceivedCommando[0]=0x07;             
-                        CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
-                        
-                        // todo flag setzen, dass fehlerhafte Baudrate empfangen wurde und somit der OpenBefehl nicht ausgefürht werden darf,
-                        // solange nicht eine korrekte benutzerdefinierte Baudreate bzw. ein S1..S9 empfangen wurde
-                        pStatus->interface_flags.BaudSettingsReceived=0;  // because of wrong baudrate received don't execute "Channel Open"
-                        
+                        if ( (strReceivedCommando[1] =='9') &&  (strReceivedCommando[2] =='5') \
+                         &&  (strReceivedCommando[3] =='0') &&  (strReceivedCommando[4] =='0') \
+                         &&  (!pStatus->interface_flags.CanChannelOnOff)  ) {  // gültige Zahl und Kanal geschlossen?
+                            SetCanBaudrate(usbBaudSettings[_95_kbit]);
+                            pStatus->interface_flags.BaudSettingsReceived=1;
+
+                            strReceivedCommando[0]=0x0D;             
+                            CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                        }
+                        else {
+                           // wrong parameter ==> send 0x07 
+                            strReceivedCommando[0]=0x07;             
+                            CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                            
+                            // todo flag setzen, dass fehlerhafte Baudrate empfangen wurde und somit der OpenBefehl nicht ausgefürht werden darf,
+                            // solange nicht eine korrekte benutzerdefinierte Baudreate bzw. ein S1..S9 empfangen wurde
+                            pStatus->interface_flags.BaudSettingsReceived=0;  // because of wrong baudrate received don't execute "Channel Open"
+                        }
                     }                    
                 }
             break;
@@ -345,6 +376,8 @@ int main(void)
 
 //                    todo aw ############### aaaaaaaaaaaaaaaaaaa
 //                    vInitCanWithScannedBaudrate(&CAN_InitStructure,&CAN_FilterInitStructure,CAN_Mode_Normal);
+                    USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_NORMAL); 
+                    USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_NORMAL); 
 
                     pStatus->interface_flags.CanChannelOnOff=1;  // Flag auf offen setzen
                     strReceivedCommando[0]=0x0D;             
@@ -399,6 +432,9 @@ int main(void)
 
                         // todo aw aaaaaaaaaaaaaaaa
                         // vInitCanWithScannedBaudrate(&CAN_InitStructure,&CAN_FilterInitStructure, CAN_Mode_Silent);
+                        USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_SILENT); 
+                        USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_SILENT); 
+                        
     
                         pStatus->interface_flags.CanChannelOnOff=1;  // Flag auf offen setzen
                         strReceivedCommando[0]=0x0D;             
@@ -649,13 +685,54 @@ void HAL_SYSTICK_Callback(void){  // handle own additional systicks
   * @brief  CAN Baudrate setzen
   *         Baudrate für die CAN-Interfaces auf einen festen Wert setzen, <br>so das keine Autobauderkennung erforderlich ist.
   * @param  None
-  * @retval Noen
+  * @retval None
   */
 void SetCanBaudrate(enBitrate enBaud) {  //
       enCanBaudrate=enBaud; 
 }
 
 
+/**
+  * @brief  User CAN initialization 
+  *         Setup the CAN port with the Lawicell baudrate
+  * @param  CAN_HandleTypeDef *hCANx
+  * @todo   impelentation and testing
+  * @note   the basic initializing is done by the cubeMX, here only baudratesettings is don
+  * @retval None
+  */
+
+static void USER_CANx_Init(CAN_HandleTypeDef *hCANx,enBitrate baud, uint32_t canMode){
+
+  
+  
+  //   
+  
+  hCANx->Init.Prescaler = stBitrate[baud].Prescaler;
+  hCANx->Init.Mode = canMode;
+  hCANx->Init.SJW =  CAN_SJW_1TQ; // always zero , which means the Synchronization Jump Width is 1 tq
+  hCANx->Init.BS1 = stBitrate[baud].BS1;
+  hCANx->Init.BS2 = stBitrate[baud].BS2;
+
+  // since here should be set ,   
+/*
+  hCANx->Init.TTCM = DISABLE;
+  hCANx->Init.ABOM = ENABLE;
+  hCANx->Init.AWUM = DISABLE;
+  hCANx->Init.NART = DISABLE;
+  hCANx->Init.RFLM = DISABLE;
+  hCANx->Init.TXFP = DISABLE;
+*/
+    
+  HAL_CAN_Init(hCANx);
+
+
+
+
+
+    
+    
+    
+}
 
 /* USER CODE END 4 */
 
