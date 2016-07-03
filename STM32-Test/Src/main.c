@@ -392,20 +392,12 @@ int main(void)
             break;
     
 
-            case 'C':       // CAN-Kanal Schliessen    (Kanal muss offen sein
+            case 'C':       // close CAN channel    (channel has to be opened, befor it can be closed)
                 if(pStatus->interface_flags.CanChannelOnOff) { // Kanal offen?
 
-//                    todo aw aaaaaaaaaaaaaaaa
-//                    #ifdef USE_CAN1
-//                        CAN_ITConfig(CAN1, CAN_IT_FMP0, DISABLE);
-//                        CAN_ITConfig(CAN1, CAN_IT_FMP1, DISABLE);
-//                        CAN_DeInit(CAN1);
-//                    #endif
-//                    #ifdef USE_CAN2
-//                        CAN_ITConfig(CAN2, CAN_IT_FMP0, DISABLE);
-//                        CAN_ITConfig(CAN2, CAN_IT_FMP1, DISABLE);
-//                        CAN_DeInit(CAN2);
-//                    #endif    
+                    // todo aw: use also a macro to select which CANs are used, see above for the old version without HAL
+                    HAL_CAN_DeInit(&hcan1);  // Deinit both CANs
+                    HAL_CAN_DeInit(&hcan2);
     
                     pStatus->interface_flags.CanChannelOnOff=0;  // Flag auf geschlossen setzen
                     
@@ -414,7 +406,6 @@ int main(void)
 
                     HAL_GPIO_WritePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin,GPIO_PIN_RESET);
                     HAL_GPIO_WritePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin,GPIO_PIN_RESET);
-
                 }
                 else {  // ist schon  geschlossen
                     strReceivedCommando[0]=0x07;             
