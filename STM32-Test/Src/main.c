@@ -250,7 +250,7 @@ int main(void)
       
     
 
-    HAL_CAN_Receive_IT(&hcan1,CAN_FIFO0);
+//    HAL_CAN_Receive_IT(&hcan1,CAN_FIFO0);  //todo aw: only CAN1 is used for receiving but both CAN are initialized
       
     
   
@@ -262,19 +262,15 @@ int main(void)
     if(!pTicks->ledTicks) {
         pTicks->ledTicks = LED_TICKS;
 
-        if(!pStatus->interface_flags.CanChannelOnOff) {  // Wenn CAN geschlossen dann Power-LED toggeln
+        if(!pStatus->interface_flags.CanChannelOnOff) {  // If the CAN channel is closed, the red LED is toggled.
             HAL_GPIO_TogglePin(LED_RED_GPIO_Port,LED_RED_Pin);
         }
         else {
             HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_SET);
         }
-
-
-        
-       // HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin);
     }
 
-    if(!pTicks->canTransmitDelay) {
+    if(!pTicks->canTransmitDelay) { // test for sending a cylic can message   , todo aw: remove it later
         pTicks->canTransmitDelay = CAN_TRANSMIT_DELAY;
         
         HAL_CAN_Transmit_IT(&hcan1);
@@ -288,7 +284,7 @@ int main(void)
 
         i= sprintf((char*)strReceivedCommando,"%s",myLastLine[myReadIndexLastLine]);  // Befehl kopieren als sring
 
-        // für debugzwecken einen Pong machen
+        // for first usb testing, send a pong 
         #ifdef PING_PONG
             CDC_Transmit_FS((unsigned char *)strReceivedCommando,i);   // CAN-Hacker don't want echos :-)
         #endif
@@ -414,15 +410,14 @@ int main(void)
             break;
                 
                 
-                case 'L':  //ListenOnly-Mod    darf nur gesetzt werden, wenn der Channel geschlossen ist
+                case 'L':  //listen only mode , only allowed to set when the CAN channel is closed
                     
                     pStatus->interface_flags.CanSilentModeOnOff = 0x01;
                 
                     pStatus->TimeStampCounter=0;
                     if((!pStatus->interface_flags.CanChannelOnOff) && (pStatus->interface_flags.BaudSettingsReceived)) { // Kanal geschlossen und Baudrate schon empfangen?
 
-                        // todo aw aaaaaaaaaaaaaaaa
-                        // vInitCanWithScannedBaudrate(&CAN_InitStructure,&CAN_FilterInitStructure, CAN_Mode_Silent);
+                        // todo aw : use macros for the available CAN channels
                         USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_SILENT); 
                         USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_SILENT); 
                         
@@ -647,6 +642,13 @@ void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan) {
     HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin);
+    // valid CAN-Message received
+    
+    // todo managed recieved data
+    
+    
+    // when release fifo0 ISR Bit
+    __HAL_CAN_ENABLE_IT(hcan, CAN_IT_FMP0);  // achtung kein check auf welchen Buffer, hier fest 0
     
 }
 
