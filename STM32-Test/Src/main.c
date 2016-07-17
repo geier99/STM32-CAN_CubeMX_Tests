@@ -192,12 +192,13 @@ int main(void)
   /* USER CODE BEGIN 2 */
   
     USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_NORMAL);   // overwrite the cubeMX initialization
-    USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_NORMAL);   // first init it with 100kbit   todo: remvoe onyl init from lawicell opoen commands
+    USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_NORMAL);   // first init it with 100kbit   todo: remvoe onyl init from lawicel opoen commands
 
     HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_SET);
     HAL_GPIO_WritePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin,GPIO_PIN_RESET);
     
     HAL_GPIO_WritePin(CAN_RS_GPIO_Port,CAN_RS_Pin,GPIO_PIN_RESET);  // enable 82C250  HS
+
 
    
     
@@ -248,17 +249,6 @@ int main(void)
 
   /* USER CODE BEGIN 3 */
       
-    
-
-//    HAL_CAN_Receive_IT(&hcan1,CAN_FIFO0);  //todo aw: only CAN1 is used for receiving but both CAN are initialized
-      
-    
-  
-
-
-
-      
-      
     if(!pTicks->ledTicks) {
         pTicks->ledTicks = LED_TICKS;
 
@@ -280,15 +270,14 @@ int main(void)
     }
     
 
-    if(myWriteIndexLastLine!=myReadIndexLastLine) {  // neuen Commandostring empfangen?
+    if(myWriteIndexLastLine!=myReadIndexLastLine) {  // new lawicel comand string received?
 
-        i= sprintf((char*)strReceivedCommando,"%s",myLastLine[myReadIndexLastLine]);  // Befehl kopieren als sring
+        i= sprintf((char*)strReceivedCommando,"%s",myLastLine[myReadIndexLastLine]);  // yes,  copy command from buffer as string
 
         // for first usb testing, send a pong 
         #ifdef PING_PONG
             CDC_Transmit_FS((unsigned char *)strReceivedCommando,i);   // CAN-Hacker don't want echos :-)
         #endif
-
 
         switch (strReceivedCommando[0]) {           // execute Lawicel commands
 
@@ -365,22 +354,20 @@ int main(void)
             break;
                 
                 
-            case 'O':    // CAN-Kanal öffnen (Kanal muss geschlossen sein)
+            case 'O':    // open CAN channel ( channel has to be closed)
                 pStatus->interface_flags.CanSilentModeOnOff = 0x00;  // normaler Modus
                 pStatus->TimeStampCounter=0;
                 if((!pStatus->interface_flags.CanChannelOnOff) && (pStatus->interface_flags.BaudSettingsReceived)) { // Kanal geschlossen und Baudrate schon empfangen?
 
-//                    todo aw ############### aaaaaaaaaaaaaaaaaaa
-//                    vInitCanWithScannedBaudrate(&CAN_InitStructure,&CAN_FilterInitStructure,CAN_Mode_Normal);
                     USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_NORMAL); 
                     USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_NORMAL); 
 
-                    pStatus->interface_flags.CanChannelOnOff=1;  // Flag auf offen setzen
+                    pStatus->interface_flags.CanChannelOnOff=1;  // set flag to status "opened"
                     strReceivedCommando[0]=0x0D;             
                     
                     CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
                 }
-                else {  // ist schon offen
+                else {  // already opened
                     strReceivedCommando[0]=0x07;  
 
                     CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
@@ -389,13 +376,13 @@ int main(void)
     
 
             case 'C':       // close CAN channel    (channel has to be opened, befor it can be closed)
-                if(pStatus->interface_flags.CanChannelOnOff) { // Kanal offen?
+                if(pStatus->interface_flags.CanChannelOnOff) { // channel opened?
 
                     // todo aw: use also a macro to select which CANs are used, see above for the old version without HAL
                     HAL_CAN_DeInit(&hcan1);  // Deinit both CANs
                     HAL_CAN_DeInit(&hcan2);
     
-                    pStatus->interface_flags.CanChannelOnOff=0;  // Flag auf geschlossen setzen
+                    pStatus->interface_flags.CanChannelOnOff=0;  // set flag to status "closed"
                     
                     strReceivedCommando[0]=0x0D;             
                     CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
@@ -403,47 +390,36 @@ int main(void)
                     HAL_GPIO_WritePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin,GPIO_PIN_RESET);
                     HAL_GPIO_WritePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin,GPIO_PIN_RESET);
                 }
-                else {  // ist schon  geschlossen
+                else {  // already closed
                     strReceivedCommando[0]=0x07;             
                     CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
                 }
             break;
                 
                 
-                case 'L':  //listen only mode , only allowed to set when the CAN channel is closed
+            case 'L':  //listen only mode , only allowed to set when the CAN channel is closed
                     
-                    pStatus->interface_flags.CanSilentModeOnOff = 0x01;
-                
-                    pStatus->TimeStampCounter=0;
-                    if((!pStatus->interface_flags.CanChannelOnOff) && (pStatus->interface_flags.BaudSettingsReceived)) { // Kanal geschlossen und Baudrate schon empfangen?
+                pStatus->interface_flags.CanSilentModeOnOff = 0x01;
+                pStatus->TimeStampCounter=0;
+            
+                if((!pStatus->interface_flags.CanChannelOnOff) && (pStatus->interface_flags.BaudSettingsReceived)) { // Kanal geschlossen und Baudrate schon empfangen?
+                    // todo aw : use macros for the available CAN channels
+                    USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_SILENT); 
+                    USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_SILENT); 
 
-                        // todo aw : use macros for the available CAN channels
-                        USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_SILENT); 
-                        USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_SILENT); 
-                        
-    
-                        pStatus->interface_flags.CanChannelOnOff=1;  // Flag auf offen setzen
-                        strReceivedCommando[0]=0x0D;             
+                    pStatus->interface_flags.CanChannelOnOff=1;  
+                    strReceivedCommando[0]=0x0D;             
+                    
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                }
+                else {  // already opened
+                    strReceivedCommando[0]=0x07;  
 
-                        //USB_SIL_Write(EP1_IN, (u8 *)strReceivedCommando, 1);
-                        CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
-                                
-                        
-                    }
-                    else {  // ist schon offen
-                        strReceivedCommando[0]=0x07;  
-
-                        //USB_SIL_Write(EP1_IN, (u8 *)strReceivedCommando, 1);
-                        CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
-                    }
-                break;
-                                
-                                
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                }
+            break;
                 
-                
-
-                
-            case 'Z':  // Status für den Zeitstempel setzen
+            case 'Z':  // set timestamp status
                 strReceivedCommando[0]=0x0D;  
                 if(strReceivedCommando[1]=='1') {
                     pStatus->interface_flags.TimeStampOnOff=1;
@@ -452,15 +428,13 @@ int main(void)
                     if (strReceivedCommando[1]=='0') {
                         pStatus->interface_flags.TimeStampOnOff=0;
                     }
-                    else {  // unbekannter Status, Fehlercode setzen
+                    else {  // unknown status, set error code for the response
                         strReceivedCommando[0]=0x07;  
                     }
                 }
                 CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
 
             break;
-            
-
                 
             case 0x07:                              // Lawicel: error received?  also set by receiving more than 20 chars without [CR]
                 CDC_Transmit_FS((unsigned char *)strReceivedCommando,1);
@@ -470,22 +444,17 @@ int main(void)
                 CDC_Transmit_FS((unsigned char *)strReceivedCommando,1);
             
             break;
-         }   // end switch commds
+         }   // end switch lawicel commands
 
-        if(myReadIndexLastLine < (MAX_USB_RECEIVED_BUFFER - 1)) {      //  Schreib index für den Empfangsbuffer eins weiter bzw. auf Anfang setzen
+        if(myReadIndexLastLine < (MAX_USB_RECEIVED_BUFFER - 1)) {   
             myReadIndexLastLine += 1;                                  
         }
         else {
             myReadIndexLastLine = 0;
         }
-    }  // Ende neuer Commandostring empfangen
-
-
-
-    
-        
-      
+    }  // end new command string received
   }
+  
   /* USER CODE END 3 */
 
 }
@@ -644,7 +613,7 @@ void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan) {
     HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin);
     // valid CAN-Message received
     
-    // todo managed recieved data
+    // todo managed received data
     
     
     // when release fifo0 ISR Bit
@@ -687,7 +656,7 @@ void SetCanBaudrate(enBitrate enBaud) {  //
 
 /**
   * @brief  User CAN initialization 
-  *         Setup the CAN port with the Lawicell baudrate
+  *         Setup the CAN port with the Lawicel baudrate
   * @param  CAN_HandleTypeDef *hCANx
   * @todo   impelentation and testing
   * @note   the basic initializing is done by the cubeMX, here only baudratesettings is don

@@ -181,6 +181,22 @@
         <Bp>
           <Number>0</Number>
           <Type>0</Type>
+          <LineNumber>434</LineNumber>
+          <EnabledFlag>1</EnabledFlag>
+          <Address>134241210</Address>
+          <ByteObject>0</ByteObject>
+          <HtxType>0</HtxType>
+          <ManyObjects>0</ManyObjects>
+          <SizeOfObject>0</SizeOfObject>
+          <BreakByAccess>0</BreakByAccess>
+          <BreakIfRCount>1</BreakIfRCount>
+          <Filename>../Src/main.c</Filename>
+          <ExecCommand></ExecCommand>
+          <Expression>\\STM32_Test\../Src/main.c\434</Expression>
+        </Bp>
+        <Bp>
+          <Number>1</Number>
+          <Type>0</Type>
           <LineNumber>386</LineNumber>
           <EnabledFlag>1</EnabledFlag>
           <Address>134241030</Address>
@@ -195,7 +211,7 @@
           <Expression>\\STM32_Test\../Src/main.c\386</Expression>
         </Bp>
         <Bp>
-          <Number>1</Number>
+          <Number>2</Number>
           <Type>0</Type>
           <LineNumber>384</LineNumber>
           <EnabledFlag>1</EnabledFlag>
