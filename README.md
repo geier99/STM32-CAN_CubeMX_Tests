@@ -18,6 +18,14 @@ V0.2:
 - the testmessage is send after power up, but now then the channel is closed by lawicel protocol, the transmission is stopped.
   Only then the channel is opened again by lawicel protocol, then the transmission is started again.
 - Remember: on receiving CAN frames only the blue led is toggeled. 
+
+
+V0.3  - now the received CAN frames are visible in the CAN-Hacker :   
+- add Lawicel for receiving CAN frames  (StdID and ExtID)
+- Bugfix Hardfault Error by pressing "transmit"-button in CAN-Hacker
+- propared the logic for transmitting CAN frames
+- removed the transmission of the testmessage at power-up.
+  the test messages are only sent by receiving the tramsmit request from CAN-Hacker
   
 Todos:
 * CAN2 
