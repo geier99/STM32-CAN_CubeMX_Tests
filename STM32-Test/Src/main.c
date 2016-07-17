@@ -142,6 +142,17 @@ const Bitrate_st stBitrate[COUNT_BITRATE]= {  // Reihenfolge ergibt sich von der
 };
 
  
+struct myRxMessage_st stLastRxMessage[MYRX_SIZE];
+
+#if MYRX_SIZE<256
+    vu8 rx_wr_CAN_index=0;              // Schreibindex im CAN-RX-Empfangspuffer
+    vu8 rx_rd_CAN_index=0;              // Leseindex CAN-RX-Empfangspuffer
+    vu8 CanReceivedCounter=0;           // Flag das eine neue Botschaft in LastRxMessage abgelegt wurde.
+#else
+    vu16 rx_wr_CAN_index=0;    
+    vu16 rx_rd_CAN_index=0;
+    vu16 CanReceivedCounter=0;
+#endif
 
 
 /* USER CODE END PV */
@@ -172,6 +183,8 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
     uint32_t i;
+    InterruptStatus_t irq_status;    
+    
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -453,7 +466,65 @@ int main(void)
             myReadIndexLastLine = 0;
         }
     }  // end new command string received
-  }
+    
+    // handle  the received CAN-Frames:
+    if(CanReceivedCounter) {       //  // Liegt eine CAN-Message im Empfangsbuffer?    Ja dann auf gleichen Port zum senden merken
+        u8 idx=0;
+        u8 db;
+        u8 DLC;
+        u32 ID;
+        
+        DLC=stLastRxMessage[rx_rd_CAN_index].LastRxMessage.DLC;
+        
+        if(stLastRxMessage[rx_rd_CAN_index].LastRxMessage.IDE == CAN_ID_STD) {
+            ID=stLastRxMessage[rx_rd_CAN_index].LastRxMessage.StdId;
+            
+            
+            strReceivedCommando[idx++]='t';
+            idx+=sprintf((char*)&strReceivedCommando[idx],"%03X",ID);
+        }
+        else {
+            ID=stLastRxMessage[rx_rd_CAN_index].LastRxMessage.ExtId;
+
+                
+            strReceivedCommando[idx++]='T';
+            idx+=sprintf((char*)&strReceivedCommando[idx],"%08X",ID);
+        }
+            
+            
+        strReceivedCommando[idx++]=DLC + '0';
+
+        for(i=0;i<stLastRxMessage[rx_rd_CAN_index].LastRxMessage.DLC;i++) {
+            db=stLastRxMessage[rx_rd_CAN_index].LastRxMessage.Data[i];     // maybe I need db later for special functions which depends on dip-switch
+                
+            idx+= sprintf((char*)&strReceivedCommando[idx],"%02X",db);
+        }
+
+        if(pStatus->interface_flags.TimeStampOnOff) { // Zeitstempel hinzufügen
+            idx+= sprintf((char*)&strReceivedCommando[idx],"%04X",stLastRxMessage[rx_rd_CAN_index].timeStamp );				
+        }
+
+        strReceivedCommando[idx++]=0x0D;
+
+        CDC_Transmit_FS((u8 *)strReceivedCommando,idx); 
+
+        if(++rx_rd_CAN_index == MYRX_SIZE) { 
+            rx_rd_CAN_index=0;              // Lese Index auf Anfang vom Puffer setzen, falls die aktuelle Nachricht das Pufferende war
+        }
+        
+        irq_status= Interrupt_saveAndDisable();  // which is the CubeMX version for disable the global ISR????   so I use my own 
+            CanReceivedCounter--;              // Empfangszähler
+        Interrupt_restore(irq_status);
+
+        
+        //if(!canErrorStatus) GREEN_LED_TOGGLE();   
+        
+        
+    } // end handle received CAN frames
+    
+    
+    
+  } // end while main loop
   
   /* USER CODE END 3 */
 
@@ -610,11 +681,39 @@ void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan) {
+    u32 j;
     HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin);
     // valid CAN-Message received
     
-    // todo managed received data
+    // todo managed received data, 
+    //only the the received can-messages will be put into the rx-buffer
+    // and also fifo0 is used 
+    // please note that this is an import of my STM32 interface which didn't use CubeMX, so maybe it not a good implementation :-(
+    // also the RxMessag structure differ, I only used the values whcih I need,
     
+    stLastRxMessage[rx_wr_CAN_index].LastRxMessage.IDE =  hcan1.pRxMsg->IDE;
+    if(CAN_ID_STD == hcan1.pRxMsg->IDE) {
+         stLastRxMessage[rx_wr_CAN_index].LastRxMessage.StdId =  hcan1.pRxMsg->StdId;
+    }
+    else {
+         stLastRxMessage[rx_wr_CAN_index].LastRxMessage.ExtId =  hcan1.pRxMsg->ExtId;     
+    }
+    stLastRxMessage[rx_wr_CAN_index].LastRxMessage.DLC =  hcan1.pRxMsg->DLC; 
+    
+    for(j=0;j<8;j++) { // copy all 8 data bytes , don't take care about DLC
+        stLastRxMessage[rx_wr_CAN_index].LastRxMessage.Data[j] = hcan1.pRxMsg->Data[j];
+    }
+    
+	stLastRxMessage[rx_wr_CAN_index].pCAN=CAN1;                                      // CAN-Schnittstelle speichern
+    
+    stLastRxMessage[rx_wr_CAN_index].timeStamp = pStatus->TimeStampCounter;
+
+         
+    if(++rx_wr_CAN_index == MYRX_SIZE)  rx_wr_CAN_index=0;                           // Write Index auf Anfang vom Puffer setzen  
+    if(++CanReceivedCounter == MYRX_SIZE) {
+        CanReceivedCounter=0;    // bei Bufferüberlauf Counter zurücksetzen, dadurch gehen Nachrichten verloren, sollte aber nie vorkommen
+    }        
+   
     
     // when release fifo0 ISR Bit
     __HAL_CAN_ENABLE_IT(hcan, CAN_IT_FMP0);  // achtung kein check auf welchen Buffer, hier fest 0
@@ -639,6 +738,11 @@ void HAL_SYSTICK_Callback(void){  // handle own additional systicks
         }
         pTick++;
     }
+
+    if (++pStatus->TimeStampCounter > END_VALUE_TIMESTAMP_COUNTER) {  // Zähler nur von 0....59999ms laufen lassen)
+        pStatus->TimeStampCounter=0;
+    }
+
     
     
 }
@@ -664,8 +768,6 @@ void SetCanBaudrate(enBitrate enBaud) {  //
   */
 
 static void USER_CANx_Init(CAN_HandleTypeDef *hCANx,enBitrate baud, uint32_t canMode){
-
-  
   
   //   
   
@@ -686,15 +788,14 @@ static void USER_CANx_Init(CAN_HandleTypeDef *hCANx,enBitrate baud, uint32_t can
 */
     
   HAL_CAN_Init(hCANx);
-
-
-
-
-
-    
+ 
     
     
 }
+
+
+
+
 
 /* USER CODE END 4 */
 

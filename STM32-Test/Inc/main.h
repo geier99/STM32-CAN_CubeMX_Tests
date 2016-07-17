@@ -8,7 +8,14 @@
 
 /* Includes ------------------------------------------------------------------*/
 //#include "stm32f10x.h"
-#include "stm32f1xx.h"     
+#include "stm32f1xx.h"   
+
+// ######## user settings #############################################
+     
+//! Größe des CAN Empfangsbuffers
+#define MYRX_SIZE (100)
+
+//######### end user settings ##################################
 
 // #define PING_PONG   // send back the received line , Attention: CAN-Hacker don't like this :-)
      
@@ -19,6 +26,8 @@
 #define STM32_L_RESPONSE "L\xD"
      
      
+#define STATUS_ERROR_CHANGED_DELAY_TIME (1000)  // 1s Verzögerung für das wiederholte senden des Fehlerstatus bei einer Änderung
+#define END_VALUE_TIMESTAMP_COUNTER (0xEA5F)    // Timestamp Zähler zählt bis zu diesen Wert 59999ms 
      
      
      
@@ -74,7 +83,16 @@ typedef __I uint8_t vuc8;   /*!< Read Only */
   * @}
   */
 
-     
+   
+typedef struct myRxMessage_st {
+    CanRxMsgTypeDef LastRxMessage;     // Empfangene Message  
+    CAN_TypeDef  *pCAN;         // Zeiger auf die Empfangsschnittstelle
+    u16 timeStamp;              // Timestamp  
+}myRxMessage_t;
+
+
+
+
  
  
 //! Typedef für die allgemeine Interface-Statusflags
@@ -110,7 +128,8 @@ typedef struct Bitrate_t {      //
     uint32_t BS2;
 } Bitrate_st ;
 
-
+//! Type for holding interrupt status 
+typedef uint32_t InterruptStatus_t;
 
 
 extern volatile unsigned char  myLastLine[MAX_USB_RECEIVED_BUFFER][MAX_USB_RECEIVED_BUFFER_LEN+1];    // Ablage Commandas Strings die per USB empfangen werden
@@ -120,11 +139,29 @@ extern volatile unsigned char  myLastLinePosIdx;        // Spaltenindex von USB 
 
 
 extern const enBitrate usbBaudSettings[_LAST_BAUDRATE_];
-
+extern struct myRxMessage_st stLastRxMessage[];
 
 
 void SetCanBaudrate(enBitrate enBaud);     
-     
+
+
+// Globally enables interrupts if they were enabled 
+   
+__STATIC_INLINE void Interrupt_restore(InterruptStatus_t status){
+    __set_PRIMASK(status & 0x01);
+}
+
+// Globally disables interrupts if they are not already disabled 
+__STATIC_INLINE InterruptStatus_t Interrupt_saveAndDisable(void){
+	InterruptStatus_t status;
+
+    status = __get_PRIMASK();
+    __set_PRIMASK(status | 0x01);
+
+    return status;
+}
+
+
 
 #ifdef __cplusplus
 }
