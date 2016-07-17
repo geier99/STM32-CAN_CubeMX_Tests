@@ -204,8 +204,6 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
   
-    USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_NORMAL);   // overwrite the cubeMX initialization
-    USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_NORMAL);   // first init it with 100kbit   todo: remvoe onyl init from lawicel opoen commands
 
     HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_SET);
     HAL_GPIO_WritePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin,GPIO_PIN_RESET);
@@ -215,15 +213,6 @@ int main(void)
 
    
     
-    hcan1.pTxMsg = &myTxMessage;
-    
-    myTxMessage.DLC = 4;
-    myTxMessage.StdId = 0x234;
-    
-    myTxMessage.IDE = CAN_ID_STD;
-    
-    
-    HAL_CAN_Transmit_IT(&hcan1);
     
     myFilter.FilterNumber           = 0;
     myFilter.FilterMode             = CAN_FILTERMODE_IDMASK;
@@ -238,18 +227,10 @@ int main(void)
     HAL_CAN_ConfigFilter(&hcan1,&myFilter);
     
 
-    hcan1.pRxMsg=  &myRxMessage;
-    if (HAL_CAN_Receive_IT(&hcan1, CAN_FIFO0) != HAL_OK) {
-        /* Reception Error */
-        HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_RESET);
-    }    
-    
+    // disable CAN, because the channel is not opened at startup (and onl
+    HAL_CAN_DeInit(&hcan1);  // Deinit both CANs
+    HAL_CAN_DeInit(&hcan2);
 
-    myTxMessage.DLC = 3;
-    myTxMessage.ExtId = 0x14F00500;
-    
-    myTxMessage.IDE = CAN_ID_EXT;
-    myTxMessage.Data[0] = 0xAA;
 
 
   /* USER CODE END 2 */
@@ -276,7 +257,7 @@ int main(void)
     if(!pTicks->canTransmitDelay) { // test for sending a cylic can message   , todo aw: remove it later
         pTicks->canTransmitDelay = CAN_TRANSMIT_DELAY;
         
-        HAL_CAN_Transmit_IT(&hcan1);
+       // HAL_CAN_Transmit_IT(&hcan1);
 
         // CDC_Transmit_FS(usbHelloMsg,strlen((const char *)usbHelloMsg));
 
@@ -374,6 +355,14 @@ int main(void)
 
                     USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_NORMAL); 
                     USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_NORMAL); 
+                    
+                    hcan1.pRxMsg=  &myRxMessage;
+                    if (HAL_CAN_Receive_IT(&hcan1, CAN_FIFO0) != HAL_OK) {
+                        /* Reception Error */
+                        HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_RESET);
+                    }    
+                    
+                    
 
                     pStatus->interface_flags.CanChannelOnOff=1;  // set flag to status "opened"
                     strReceivedCommando[0]=0x0D;             
@@ -420,6 +409,12 @@ int main(void)
                     USER_CANx_Init(&hcan1,enCanBaudrate,CAN_MODE_SILENT); 
                     USER_CANx_Init(&hcan2,enCanBaudrate,CAN_MODE_SILENT); 
 
+                    hcan1.pRxMsg=  &myRxMessage;
+                    if (HAL_CAN_Receive_IT(&hcan1, CAN_FIFO0) != HAL_OK) {
+                        /* Reception Error */
+                        HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_RESET);
+                    }    
+
                     pStatus->interface_flags.CanChannelOnOff=1;  
                     strReceivedCommando[0]=0x0D;             
                     
@@ -448,6 +443,70 @@ int main(void)
                 CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
 
             break;
+            
+                
+            case 't':
+                if(pStatus->interface_flags.CanChannelOnOff && !pStatus->interface_flags.CanSilentModeOnOff) {   // Interface Channel aktiviert? und kein Listen Only Modus
+                    strReceivedCommando[0]=0x0D;        // for test, send positive response immediately            
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                    
+                    //##################################################
+                    // todo  put you send can frame task here  StdID
+                    
+                    
+                                hcan1.pTxMsg = &myTxMessage;
+                                
+                                myTxMessage.DLC = 4;
+                                myTxMessage.StdId = 0x234;
+                                myTxMessage.IDE = CAN_ID_STD;
+    
+                                // the tesmesssag is now sent here
+                                HAL_CAN_Transmit_IT(&hcan1);
+                    
+                    
+                    // end todo
+                    //###################################################
+                }
+                else { // interface is not allowed to send a CAN frame
+                    strReceivedCommando[0]=0x07;                    
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                }
+                
+            break;
+
+            case 'T':
+                if(pStatus->interface_flags.CanChannelOnOff && !pStatus->interface_flags.CanSilentModeOnOff) {   // Interface Channel aktiviert? und kein Listen Only Modus
+                    strReceivedCommando[0]=0x0D;        // for test, send positive response immediately            
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                    
+                    //##################################################
+                    // todo  put you send can frame task here  StdID
+                    
+                    
+                                myTxMessage.DLC = 3;
+                                myTxMessage.ExtId = 0x14F00500;
+                                
+                                myTxMessage.IDE = CAN_ID_EXT;
+                                myTxMessage.Data[0] = 0xAA;
+                    
+                    
+                                // the tesmesssag is now sent here
+                                HAL_CAN_Transmit_IT(&hcan1);
+                    
+                    
+                    // end todo
+                    //###################################################
+                    
+                }
+                else { // interface is not allowed to send a CAN frame
+                    strReceivedCommando[0]=0x07;                    
+                    CDC_Transmit_FS((u8 *)strReceivedCommando,1); 
+                }
+
+            break;
+            
+            
+            
                 
             case 0x07:                              // Lawicel: error received?  also set by receiving more than 20 chars without [CR]
                 CDC_Transmit_FS((unsigned char *)strReceivedCommando,1);
@@ -682,38 +741,41 @@ void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan) {
     u32 j;
-    HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin);
-    // valid CAN-Message received
     
-    // todo managed received data, 
-    //only the the received can-messages will be put into the rx-buffer
-    // and also fifo0 is used 
-    // please note that this is an import of my STM32 interface which didn't use CubeMX, so maybe it not a good implementation :-(
-    // also the RxMessag structure differ, I only used the values whcih I need,
+    if(pStatus->interface_flags.CanChannelOnOff) {   // only do something when the can channel is opened
     
-    stLastRxMessage[rx_wr_CAN_index].LastRxMessage.IDE =  hcan1.pRxMsg->IDE;
-    if(CAN_ID_STD == hcan1.pRxMsg->IDE) {
-         stLastRxMessage[rx_wr_CAN_index].LastRxMessage.StdId =  hcan1.pRxMsg->StdId;
-    }
-    else {
-         stLastRxMessage[rx_wr_CAN_index].LastRxMessage.ExtId =  hcan1.pRxMsg->ExtId;     
-    }
-    stLastRxMessage[rx_wr_CAN_index].LastRxMessage.DLC =  hcan1.pRxMsg->DLC; 
-    
-    for(j=0;j<8;j++) { // copy all 8 data bytes , don't take care about DLC
-        stLastRxMessage[rx_wr_CAN_index].LastRxMessage.Data[j] = hcan1.pRxMsg->Data[j];
-    }
-    
-	stLastRxMessage[rx_wr_CAN_index].pCAN=CAN1;                                      // CAN-Schnittstelle speichern
-    
-    stLastRxMessage[rx_wr_CAN_index].timeStamp = pStatus->TimeStampCounter;
+        HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port,LED_BLUE_Pin);
+        // valid CAN-Message received
+        
+        
+        //only the the received can-messages will be put into the rx-buffer
+        // and also fifo0 is used 
+        // please note that this is an import of my STM32 interface which didn't use CubeMX, so maybe it not a good implementation :-(
+        // also the RxMessag structure differ, I only used the values whcih I need,
+        
+        stLastRxMessage[rx_wr_CAN_index].LastRxMessage.IDE =  hcan1.pRxMsg->IDE;
+        if(CAN_ID_STD == hcan1.pRxMsg->IDE) {
+             stLastRxMessage[rx_wr_CAN_index].LastRxMessage.StdId =  hcan1.pRxMsg->StdId;
+        }
+        else {
+             stLastRxMessage[rx_wr_CAN_index].LastRxMessage.ExtId =  hcan1.pRxMsg->ExtId;     
+        }
+        stLastRxMessage[rx_wr_CAN_index].LastRxMessage.DLC =  hcan1.pRxMsg->DLC; 
+        
+        for(j=0;j<8;j++) { // copy all 8 data bytes , don't take care about DLC
+            stLastRxMessage[rx_wr_CAN_index].LastRxMessage.Data[j] = hcan1.pRxMsg->Data[j];
+        }
+        
+        stLastRxMessage[rx_wr_CAN_index].pCAN=CAN1;                                      // CAN-Schnittstelle speichern
+        
+        stLastRxMessage[rx_wr_CAN_index].timeStamp = pStatus->TimeStampCounter;
 
-         
-    if(++rx_wr_CAN_index == MYRX_SIZE)  rx_wr_CAN_index=0;                           // Write Index auf Anfang vom Puffer setzen  
-    if(++CanReceivedCounter == MYRX_SIZE) {
-        CanReceivedCounter=0;    // bei Bufferüberlauf Counter zurücksetzen, dadurch gehen Nachrichten verloren, sollte aber nie vorkommen
-    }        
-   
+             
+        if(++rx_wr_CAN_index == MYRX_SIZE)  rx_wr_CAN_index=0;                           // Write Index auf Anfang vom Puffer setzen  
+        if(++CanReceivedCounter == MYRX_SIZE) {
+            CanReceivedCounter=0;    // bei Bufferüberlauf Counter zurücksetzen, dadurch gehen Nachrichten verloren, sollte aber nie vorkommen
+        }        
+    }
     
     // when release fifo0 ISR Bit
     __HAL_CAN_ENABLE_IT(hcan, CAN_IT_FMP0);  // achtung kein check auf welchen Buffer, hier fest 0
